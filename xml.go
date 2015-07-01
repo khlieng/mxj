@@ -225,18 +225,14 @@ func xmlToTreeParser(skey string, a []xml.Attr, p *xml.Decoder) (*node, error) {
 			for _, v := range a {
 				na := new(node)
 				na.attr = true
-				if useHyphen {
-					na.key = `-` + v.Name.Local
-				} else {
-					na.key = v.Name.Local
-				}
+				na.key = v.Name.Local
 				na.val = v.Value
 				n.nodes = append(n.nodes, na)
 			}
 		}
 	}
 	for {
-		t, err := p.Token()
+		t, err := p.RawToken()
 		if err != nil {
 			if err != io.EOF {
 				return nil, errors.New("xml.Decoder.Token() - " + err.Error())
@@ -246,24 +242,28 @@ func xmlToTreeParser(skey string, a []xml.Attr, p *xml.Decoder) (*node, error) {
 		switch t.(type) {
 		case xml.StartElement:
 			tt := t.(xml.StartElement)
+			var key string
+
+			if tt.Name.Space != "" {
+				key = tt.Name.Space + ":" + tt.Name.Local
+			} else {
+				key = tt.Name.Local
+			}
+
 			// handle root
 			if n.key == "" {
-				n.key = tt.Name.Local
+				n.key = key
 				if len(tt.Attr) > 0 {
 					for _, v := range tt.Attr {
 						na := new(node)
 						na.attr = true
-						if useHyphen {
-							na.key = `-` + v.Name.Local
-						} else {
-							na.key = v.Name.Local
-						}
+						na.key = v.Name.Local
 						na.val = v.Value
 						n.nodes = append(n.nodes, na)
 					}
 				}
 			} else {
-				nn, nnerr := xmlToTreeParser(tt.Name.Local, tt.Attr, p)
+				nn, nnerr := xmlToTreeParser(key, tt.Attr, p)
 				if nnerr != nil {
 					return nil, nnerr
 				}
@@ -285,7 +285,7 @@ func xmlToTreeParser(skey string, a []xml.Attr, p *xml.Decoder) (*node, error) {
 			if len(n.nodes) > 0 && len(tt) > 0 {
 				// if len(n.nodes) > 0 {
 				nn := new(node)
-				nn.key = "#text"
+				nn.key = "_"
 				nn.val = tt
 				n.nodes = append(n.nodes, nn)
 			} else {
@@ -294,7 +294,7 @@ func xmlToTreeParser(skey string, a []xml.Attr, p *xml.Decoder) (*node, error) {
 			if includeTagSeqNum { // 2014.11.09
 				if len(n.nodes) == 0 { // treat like a simple element with attributes
 					nn := new(node)
-					nn.key = "#text"
+					nn.key = "_"
 					nn.val = tt
 					n.nodes = append(n.nodes, nn)
 				}
@@ -430,7 +430,7 @@ func XmlDefaultEmptyElemSyntax() {
 //    - If len(mv) == 1 and no rootTag is provided, then the map key is used as the root tag, possible.
 //      Thus, `{ "key":"value" }` encodes as "<key>value</key>".
 //    - To encode empty elements in a syntax consistent with encoding/xml call UseGoXmlEmptyElementSyntax().
-// The attributes tag=value pairs are alphabetized by "tag".  Also, when encoding map[string]interface{} values - 
+// The attributes tag=value pairs are alphabetized by "tag".  Also, when encoding map[string]interface{} values -
 // complex elements, etc. - the key:value pairs are alphabetized by key so the resulting tags will appear sorted.
 func (mv Map) Xml(rootTag ...string) ([]byte, error) {
 	m := map[string]interface{}(mv)
@@ -900,4 +900,3 @@ func (e elemList) Less(i, j int) bool {
 	}
 	return true
 }
-
